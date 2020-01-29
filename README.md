@@ -1,3 +1,20 @@
+# SMM Rootkit
+
+Blah blah blah
+
+## Contents
+
+#### SMM Rootkit
+This folder contains the files & folders to be copied to the edk2 root dir to compile the SMM Rootkit with the rest of the OVMF. It includes ready-made configuration files and modified source files to allow the rootkit to access the whole 64-bit memory address space with on-demand paging.
+
+#### shellcode
+Contains shellcode to be generated for the SMM rootkit. This shellcode is then injected from the SMM to whatever process/operating system is targeted. You can read more about different types of attacks from their subfolders. Currently there is only Windows x64 usermode IAT hooking, but more should be added!
+
+#### target_tests
+Contains test programs to test the Rootkit functionality. For more information, check the subfolders' readmes.
+
+## Compiling
+
 ### First time setup
 
 Skip to "Building" if you have done the first-time setup already.

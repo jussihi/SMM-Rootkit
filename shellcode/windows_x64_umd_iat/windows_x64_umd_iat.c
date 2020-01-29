@@ -5,15 +5,7 @@
 // (c) Ulf Frisk, 2019
 // Author: Ulf Frisk, pcileech@frizk.net
 // Modified for SMM rootkit by Jussi Hietanen
-/*
 
-COMPILE WITH:
-
-cl.exe /O1 /Os /Oy /FD /MT /GS- /J /GR- /FAcs /W4 /c /TC wx64_umd_exec_c.c
-ml64 wx64_umd_exec.asm /link /NODEFAULTLIB /RELEASE /MACHINE:X64 /entry:main "wx64_umd_exec_c.obj"
-shellcode64.exe -o wx64_umd_exec.exe
-
-*/
 #include <windows.h>
 
 typedef unsigned __int64		QWORD, *PQWORD;

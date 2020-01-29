@@ -2,27 +2,27 @@
 
 Skip to "Building" if you have done the first-time setup already.
 
-1. Clone the EDK2 inside this repo and checkout the right tag (vUDK2018)
+1. Clone the EDK2 inside this repo and checkout the right tag (vUDK2018, see step 3 for why this tag). 
 ```
-git clone git@github.com:tianocore/edk2.git
-cd edk2
-git checkout vUDK2018
+$ git clone git@github.com:tianocore/edk2.git
+$ cd edk2
+$ git checkout vUDK2018
 ```
 
-2. Start docker build env and setup BaseTools (comprehensive instructions can be found from https://github.com/tianocore/tianocore.github.io/wiki/Common-instructions-for-Unix)
+2. Start docker build env and setup BaseTools
 ```
-./run_docker.sh
+# ./run_docker.sh
 ```
 Inside docker, 
 ```
-cd edk2 
-make -C edk2/BaseTools
-. edksetup.sh
+# cd edk2 
+# make -C BaseTools
+# . edksetup.sh
 ```
 
-3. Exit docker, and copy the contents of SMMRootkit folder to edk2 folder, in repo root run
+3. Exit docker, and copy the contents of SMM Rootkit folder to edk2 folder **(It is important to use the tag vUDK2018, otherwise the ready-patched files inside the SMM Rootkit folder won't match and the OVMF may not build successfully)**, in repo root run
 ```
-cp -r SMM\ Rootkit/* edk2/
+# cp -r SMM\ Rootkit/* edk2/
 ```
 
 First time setup is done!
@@ -36,9 +36,9 @@ Run
 
 Then, inside the docker,
 ```
-cd edk2
-. edksetup.sh
-build -DSMM_REQUIRE
+# cd edk2
+# . edksetup.sh
+# build -DSMM_REQUIRE
 ```
 
 The resulting OVMF firmware will be inside `edk2/Build/OvmfX64/RELEASE_GCC5/FV`.
@@ -63,7 +63,7 @@ From VM settings, choose the `edk2/Build/OvmfX64/RELEASE_GCC5/FV/OVMF.fd` as the
 
 To check the serial output
 ```
-sudo virsh list
+# virsh list
 /* win10 is the name of the libvirt instance */
-sudo virsh console win10
+# virsh console win10
 ```

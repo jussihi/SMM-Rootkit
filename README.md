@@ -1,8 +1,20 @@
 # SMM Rootkit
 
-Blah blah blah
+## Table of contents
+- [Repository Contents](#repository-contents)
+  * [SMM Rootkit](#smm-rootkit-1)
+  * [shellcode](#shellcode)
+  * [target_tests](#target_tests)
+- [Compiling](#compiling)
+  * [First time setup](#first-time-setup)
+  * [Building](#building)
+  * [Running the OVMF inside QEMU/KVM](#running-the-ovmf-inside-qemukvm)
 
-## Contents
+## Intro
+
+This System Management Mode (SMM) rootkit is a PoC to demonstrate how injecting shellcode to a ring0/ring3 context can be achieved from the SMM. 
+
+## Repository Contents
 
 #### SMM Rootkit
 This folder contains the files & folders to be copied to the edk2 root dir to compile the SMM Rootkit with the rest of the OVMF. It includes ready-made configuration files and modified source files to allow the rootkit to access the whole 64-bit memory address space with on-demand paging.

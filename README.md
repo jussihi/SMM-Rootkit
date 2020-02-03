@@ -8,7 +8,9 @@
 - [Compiling](#compiling)
   * [First time setup](#first-time-setup)
   * [Building](#building)
-  * [Running the OVMF inside QEMU/KVM](#running-the-ovmf-inside-qemukvm)
+- [Running the OVMF inside QEMU/KVM](#running-the-ovmf-inside-qemukvm)
+  * [VM setup](#vm-setup)
+  * [Running](#running)
 
 ## Intro
 
@@ -72,25 +74,63 @@ Then, inside the docker,
 
 The resulting OVMF firmware will be inside `edk2/Build/OvmfX64/RELEASE_GCC5/FV`.
 
-### Running the OVMF inside QEMU/KVM
+## Running the OVMF inside QEMU/KVM
+
+### VM Setup
 
 Needed packages:
 ```
-qemu
-libvirt
-virt-manager
-ebtables
-dnsmasq
+qemu libvirt virt-manager ebtables dnsmasq
 ```
+
+For qemu to show the custom OVMF binary, you need to create a file `/usr/share/qemu/firmware/60-ovmf-rootkit-x86_64.json` and inside it add our FV entry:
+```
+{
+  "description": "UEFI SMM rootkit OVMF firmware for x86_64",
+  "interface-types": [
+    "uefi"
+  ],
+  "mapping": {
+    "device": "flash",
+    "executable": {
+      "filename": "/your/path/to-git/SMM-Rootkit/edk2/Build/OvmfX64/RELEASE_GCC5/FV/OVMF_CODE.fd",
+      "format": "raw"
+    },
+    "nvram-template": {
+      "filename": "/your/path/to-git/SMM-Rootkit/edk2/Build/OvmfX64/RELEASE_GCC5/FV/OVMF_VARS.fd",
+      "format": "raw"
+    }
+  },
+  "targets": [
+    {
+      "architecture": "x86_64",
+      "machines": [
+        "pc-i440fx-*",
+        "pc-q35-*"
+      ]
+    }
+  ],
+  "features": [
+    "acpi-s3",
+    "amd-sev",
+    "verbose-dynamic"
+  ],
+  "tags": [
+    
+  ]
+}
+```
+
+Now you may create a new virtual machine. During setup, in the last state, check the box "Customize configuration before install" before clicking "Finish". From the next window, change the Firmware to the *UEFI SMM rootkit OVMF firmware for x86_64* configured earlier.
+
+### Running
 
 To start the vm, enable service `libvirtd` and enable default network; 
 ```
 # virsh net-start default
 ```
 
-From VM settings, choose the `edk2/Build/OvmfX64/RELEASE_GCC5/FV/OVMF.fd` as the UEFI firmware. You are good to go!
-
-To check the serial output
+To check the serial output (the VM must be powered on)
 ```
 # virsh list
 /* win10 is the name of the libvirt instance */

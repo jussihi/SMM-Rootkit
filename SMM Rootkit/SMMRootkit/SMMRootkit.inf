@@ -15,7 +15,7 @@
   Memory.c
   NewNTKernelTools.c
   vmm.c
-  CheatSmmRootkitTest.c
+  WinUmdIATHook.c
   TimerRTC.c
 
 [Sources.X64]

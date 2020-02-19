@@ -4,7 +4,7 @@
 #include <Base.h>
 
 #include "windows.h"
-#include "NewNTKernelTools.h"
+#include "WinTools.h"
 #include "serial.h"
 #include "Memory.h"
 

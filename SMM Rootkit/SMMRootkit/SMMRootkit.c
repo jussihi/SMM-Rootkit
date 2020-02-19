@@ -5,6 +5,7 @@
 #include <Protocol/SmmCpu.h>
 #include <Protocol/SmmBase2.h>
 #include <Protocol/SmmSwDispatch2.h>
+#include <Protocol/Cpu.h>
 #include <Protocol/SerialIo.h>
 #include <Library/PcdLib.h>
 #include <Library/BaseLib.h>
@@ -14,30 +15,21 @@
 #include <Protocol/PciIo.h>
 #include <Library/PciLib.h>
 
-// 3rd party protocols
-#include "SmmCpuService.h"
-#include "SmmCpuPlatformHookLib.h"
-#include "SmmMemoryAttribute.h"
-
 // Our includes
 #include "MemoryMapUEFI.h"
 #include "TimerRTC.h"
-#include "config.h"
 #include "serial.h"
 #include "WinUmdIATHook.h"
 #include "Memory.h"
-#include "NewNTKernelTools.h"
+#include "WinTools.h"
 
+EFI_CPU_ARCH_PROTOCOL *mCpu = NULL;
+EFI_SMM_SYSTEM_TABLE2 *gSmst2 = NULL;
 
-EFI_CPU_ARCH_PROTOCOL  *mCpu = NULL;
-EFI_SMM_SYSTEM_TABLE2		*gSmst2;
-EFI_SMM_CPU_PROTOCOL		*gSmmCpu = NULL;
-EFI_SMM_CPU_IO2_PROTOCOL	*gSmmIo = NULL;
-
-// UEFI Tables (will be gone after exiting DXE stage) 
-extern EFI_SYSTEM_TABLE *gST;
-extern EFI_BOOT_SERVICES *gBS;
-extern EFI_RUNTIME_SERVICES *gRT;
+// UEFI Tables (will be gone after exiting DXE stage)
+EFI_SYSTEM_TABLE *lST = NULL;
+EFI_BOOT_SERVICES *lBS = NULL;     // used by MemoryMapUEFI.c
+EFI_RUNTIME_SERVICES *lRT = NULL;
 
 // NTKernelTools.c
 extern WinCtx *winGlobal;
@@ -49,53 +41,51 @@ BOOLEAN SystemInitOS;
 
 VOID SmmCallHandle()
 {
-	if(!SystemInitOS)
-	{
-		// try to grab the windows Context
-		SystemInitOS = InitGlobalWindowsContext();
-		// give more time if it still failed
-		if(!SystemInitOS)
-		{
-			SystemStartTime = SystemUptime;
-			return;
-		}
-	}
+  if (!SystemInitOS)
+  {
+    // try to grab the windows Context
+    SystemInitOS = InitGlobalWindowsContext();
+    // give more time if it still failed
+    if (!SystemInitOS)
+    {
+      SystemStartTime = SystemUptime;
+      return;
+    }
+  }
 
-	// if the context has been initialized
-	WindowsUmdIATHook();
+  // if the context has been initialized
+  WindowsUmdIATHook();
 
-	return;
+  return;
 }
 
-
-EFI_STATUS EFIAPI SmmHandler(IN EFI_HANDLE  DispatchHandle, IN CONST VOID  *Context         OPTIONAL, IN OUT VOID    *CommBuffer      OPTIONAL, IN OUT UINTN   *CommBufferSize  OPTIONAL)
+EFI_STATUS EFIAPI SmmHandler(IN EFI_HANDLE DispatchHandle, IN CONST VOID *Context OPTIONAL, IN OUT VOID *CommBuffer OPTIONAL, IN OUT UINTN *CommBufferSize OPTIONAL)
 {
-	// if the OS has not been initialized
-	if(!SystemInitOS)
-	{
-		// count if the OS SHOULD be initialized
-		UINT16 TimeSinceLastSMI = CmosGetCurrentTime();
+  // if the OS has not been initialized
+  if (!SystemInitOS)
+  {
+    // count if the OS SHOULD be initialized
+    UINT16 TimeSinceLastSMI = CmosGetCurrentTime();
 
-		// Did we overflow? This happens once every hour
-		if(TimeSinceLastSMI < SystemUptime)
-			SystemUptime += TimeSinceLastSMI;
-		else
-			SystemUptime = TimeSinceLastSMI;
+    // Did we overflow? This happens once every hour
+    if (TimeSinceLastSMI < SystemUptime)
+      SystemUptime += TimeSinceLastSMI;
+    else
+      SystemUptime = TimeSinceLastSMI;
 
-		// ctx not initialized and system hasn't booted completely
-		if(SystemUptime - SystemStartTime < 10)
-		{
-			return EFI_SUCCESS;
-		}
-	}
+    // ctx not initialized and system hasn't booted completely
+    if (SystemUptime - SystemStartTime < 10)
+    {
+      return EFI_SUCCESS;
+    }
+  }
 
-	SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
-	SmmCallHandle();
-	return EFI_SUCCESS;
+  SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
+  SmmCallHandle();
+  return EFI_SUCCESS;
 }
 
-
-EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* SystemTable)
+EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
   // Write to serial port
   SerialPortInitialize(SERIAL_PORT_0, SERIAL_BAUDRATE);
@@ -110,58 +100,46 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* Syste
   SerialPrintString("--------------------------------------------\r\n");
   SerialPrintString("\r\n");
 
-  // Save the system tables etc. in global variable for further usage
-  gST = SystemTable;
-  gBS = SystemTable->BootServices;
-  gRT = SystemTable->RuntimeServices;
+  // Save the system tables etc. in global variable for further usage (currently not used)
+  lST = SystemTable;
+  lBS = SystemTable->BootServices;
+  lRT = SystemTable->RuntimeServices;
 
-  EFI_STATUS                res;
-  EFI_SMM_BASE2_PROTOCOL    *SmmBase2;
+  EFI_STATUS res;
+  EFI_SMM_BASE2_PROTOCOL *SmmBase2;
 
   EFI_GUID SmmBase2Guid = EFI_SMM_BASE2_PROTOCOL_GUID;
-  EFI_GUID SmmDispatch = EFI_SMM_SW_DISPATCH2_PROTOCOL_GUID;
-  EFI_GUID SmmCpuIo = EFI_SMM_CPU_IO2_PROTOCOL_GUID;
-  EFI_GUID SmmCpuProt = EFI_SMM_CPU_PROTOCOL_GUID;
-
-  EFI_SMM_SW_DISPATCH2_PROTOCOL *SwDispatch = NULL;
 
   // need EFI_SMM_BASE2_PROTOCOL
-  if((res = SystemTable->BootServices->LocateProtocol(&SmmBase2Guid, NULL, (void**)&SmmBase2)) != EFI_SUCCESS)
+  if ((res = SystemTable->BootServices->LocateProtocol(&SmmBase2Guid, NULL, (void **)&SmmBase2)) != EFI_SUCCESS)
   {
+    SerialPrintString("Could not locate SmmBase2 protocol!\r\n");
     return res;
   }
 
   // get EFI_SMM_SYSTEM_TABLE2 in global var
-  if((res = SmmBase2->GetSmstLocation(SmmBase2, &gSmst2)) != EFI_SUCCESS)
+  if ((res = SmmBase2->GetSmstLocation(SmmBase2, &gSmst2)) != EFI_SUCCESS)
   {
+    SerialPrintString("Could not locate SMST!\r\n");
     return res;
   }
 
-  if((res = gSmst2->SmmLocateProtocol(&SmmCpuIo, NULL, (void**)&gSmmIo)) != EFI_SUCCESS)
+  if ((res = SystemTable->BootServices->LocateProtocol(&gEfiCpuArchProtocolGuid, NULL, (void **)&mCpu)) != EFI_SUCCESS)
   {
-    return res;
-  }
-
-  if((res = SystemTable->BootServices->LocateProtocol(&gEfiCpuArchProtocolGuid, NULL, (void**)&mCpu)) != EFI_SUCCESS)
-  {
-    return res;
-  }
-
-  if((res = gSmst2->SmmLocateProtocol(&SmmCpuProt, NULL, (void**)&gSmmCpu)) != EFI_SUCCESS)
-  {
+    SerialPrintString("Could not locate EfiCpuArch protocol!\r\n");
     return res;
   }
 
   // Register SMM Root Handler, discard the returning handle (we never unload the handler)
-  EFI_HANDLE					hSmmHandler;
-  if((res = gSmst2->SmiHandlerRegister(&SmmHandler, NULL, &hSmmHandler)) != EFI_SUCCESS)
+  EFI_HANDLE hSmmHandler;
+  if ((res = gSmst2->SmiHandlerRegister(&SmmHandler, NULL, &hSmmHandler)) != EFI_SUCCESS)
   {
     return res;
   }
 
   // Initialize the virtual memory map for UEFI
   SerialPrintStringDebug("Initializing UEFI Memory Map \r\n");
-  if(!InitUefiMemoryMap())
+  if (!InitUefiMemoryMap())
   {
     SerialPrintString("Failed dumping Memory Map for UEFI \r\n");
     return EFI_ERROR_MAJOR;
@@ -173,11 +151,11 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* Syste
   SerialPrintStringDebug("\r\n");
 
   // Allocate memory for windows context.
-  // This is allocated straight as a page 
+  // This is allocated straight as a page
   // to prevent our cheap malloc trashing it
   EFI_PHYSICAL_ADDRESS physAddr;
   gSmst2->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &physAddr);
-  winGlobal = (WinCtx*)physAddr;
+  winGlobal = (WinCtx *)physAddr;
   SerialPrintStringDebug("WinGlobal: 0x");
   SerialPrintNumberDebug((UINT64)winGlobal, 16);
   SerialPrintStringDebug("\r\n");
@@ -190,12 +168,12 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE* Syste
   SerialPrintStringDebug("\r\n");
 
   // Initialize our own heap with some memory to be used
-  if(InitMemManager(100))
+  if (InitMemManager(100))
   {
     SerialPrintStringDebug("memory manager successfully initialized!\r\n");
   }
 
-  // Initialize the os ctx value, so no useless 
+  // Initialize the os ctx value, so no useless
   // probing is done while the OS hasn't even booted
   SystemInitOS = FALSE;
 

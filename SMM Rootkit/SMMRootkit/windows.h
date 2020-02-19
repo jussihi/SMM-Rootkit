@@ -1,3 +1,8 @@
+/*
+ * This file has originally been supplied from 
+ * vmread by Heep042
+ */
+
 #ifndef __smmrootkit_windows_h__
 #define __smmrootkit_windows_h__
 

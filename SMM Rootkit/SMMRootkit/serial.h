@@ -1,12 +1,20 @@
 #ifndef __smmrootkit_serial_h__
 #define __smmrootkit_serial_h__
 
+/*
+ * Serial port configuration.
+ * For EFI_DEBUG_SERIAL_BUILTIN and EFI_DEBUG_SERIAL_PROTOCOL.
+ * Port 0 is the default port on the motherboard
+ */
+#define SERIAL_BAUDRATE_MAX 115200
+#define SERIAL_BAUDRATE 115200
+#define SERIAL_PORT_0 0x3F8 
+
 #define ROOTKIT_VERBOSE
 
 #include <Base.h>
 #include <Library/IoLib.h>
 #include <Library/UefiRuntimeLib.h>
-
 
 
 /*

@@ -13,8 +13,7 @@
   MemManager.c
   MemoryMapUEFI.c
   Memory.c
-  NewNTKernelTools.c
-  vmm.c
+  WinTools.c
   WinUmdIATHook.c
   TimerRTC.c
 

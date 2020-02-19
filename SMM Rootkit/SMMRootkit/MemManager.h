@@ -26,16 +26,17 @@
 typedef struct memallocentry MemAllocEntry_t, *PMemAllocEntry_t;
 
 #ifdef __GNUC__
-struct memallocentry {
+struct memallocentry
+{
   PMemAllocEntry_t prev;
   PMemAllocEntry_t next;
   UINT64 size;
   UINT8 data[];
-}__attribute__((packed));
+} __attribute__((packed));
 #endif
 
 #ifdef _MSC_VER
-#define PACK( __Declaration__ ) __pragma( pack(push, 1) ) __Declaration__ __pragma( pack(pop))
+#define PACK(__Declaration__) __pragma(pack(push, 1)) __Declaration__ __pragma(pack(pop))
 PACK(struct memallocentry {
   PMemAllocEntry_t prev;
   PMemAllocEntry_t next;
@@ -44,7 +45,6 @@ PACK(struct memallocentry {
 });
 #endif
 
-
 /*
  * Initializes the memory manager with pages number of pages.
  * @return TRUE if succeeded, FALSE otherwise
@@ -52,24 +52,32 @@ PACK(struct memallocentry {
 BOOLEAN InitMemManager(UINT32 pages);
 
 /*
+ * Allocates number of pages, returns the physical address to allocated memory
+ */
+VOID *palloc(UINT32 pages);
+
+/*
+ * Frees number of pages from the physical address allocated by palloc
+ */
+VOID pfree(VOID *address, UINT32 pages);
+
+/*
  * Tries to dynamically allocate memory
  * 
  * @return pointer to allocated memory if succeeded, NULL otherwise
  */
-VOID* malloc(UINT32 size);
+VOID *malloc(UINT32 size);
 
 /*
  * Tries to free a memory address from before dynamically 
  * allocated memory
  */
-VOID free(VOID* address);
+VOID free(VOID *address);
 
 /*
  * Returns the total amount of bytes allocated from the pool
  * 
  */
 UINT64 GetMemAllocated();
-
-
 
 #endif

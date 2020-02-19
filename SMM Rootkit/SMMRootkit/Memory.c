@@ -1,11 +1,7 @@
 #include "Memory.h"
 
 // from SMMRootkit.c
-extern EFI_SMM_SYSTEM_TABLE2		*gSmst2;
-
-// for memory caching
-UINT64 cachingPointer = 0;
-UINT32 cachingSize = 0;
+extern EFI_SMM_SYSTEM_TABLE2 *gSmst2;
 
 
 BOOLEAN p_memCpy(UINT64 dest, UINT64 src, size_t n, BOOLEAN verbose)
@@ -18,17 +14,16 @@ BOOLEAN p_memCpy(UINT64 dest, UINT64 src, size_t n, BOOLEAN verbose)
 		return FALSE;
 	}
 
-	// Typecast src and dest addresses to (char *) 
-	char *csrc = (char *)src;
-	char *cdest = (char *)dest;
+	// Typecast src and dest addresses to (char *)
+	CHAR8 *csrc = (char *)src;
+	CHAR8 *cdest = (char *)dest;
 
-	// Copy contents of src[] to dest[] 
-	for (int i = 0; i < n; i++)
+	// Copy contents of src[] to dest[]
+	for (INT32 i = 0; i < n; i++)
 		cdest[i] = csrc[i];
 
 	return TRUE;
 }
-
 
 UINT64 VTOP(UINT64 address, UINT64 directoryBase, BOOLEAN verbose)
 {
@@ -105,7 +100,6 @@ UINT64 VTOP(UINT64 address, UINT64 directoryBase, BOOLEAN verbose)
 	if (pde & 0x80)
 		return (pde & (~0ull << 42 >> 12)) + (address & ~(~0ull << 30));
 
-
 	UINT64 pteAddr = 0;
 	p_memCpy((UINT64)&pteAddr, (UINT64)(pde & PMASK2) + 8 * pt, sizeof(UINT64), verbose);
 
@@ -147,75 +141,10 @@ UINT64 VTOP(UINT64 address, UINT64 directoryBase, BOOLEAN verbose)
 	return address + pageOffset;
 }
 
-
-UINT64 caching(UINT64 address, UINT64 directoryBase, BOOLEAN verbose)
-{
-	// Check if caching is already setup
-	if (cachingPointer != 0)
-	{
-		// Set it up now
-		EFI_PHYSICAL_ADDRESS physAddress;
-		gSmst2->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &physAddress);
-
-		if (physAddress != 0)
-		{
-			cachingPointer = physAddress;
-		}
-	}
-
-	// Handle everything with pagebases so theres only 1 translation per page
-	UINT64 virtualPageBase = address & 0xfffffffffffff000;
-	UINT64 virtualRelative = address & 0xfff;
-
-	if (cachingSize >= 255)
-	{
-		SerialPrintStringDebug("  Caching page is full \r\n");
-		return 0;
-	}
-
-
-	// Loop through the page to check if an entry exists
-	for (int i = 0; i < cachingSize; i++)
-	{
-		Cache *tempCache = (Cache *)(cachingPointer + (sizeof(Cache) * i));
-
-		if (tempCache->vAddress == virtualPageBase && tempCache->pAddress != 0)
-		{
-			// Found the entry, return phys
-			return tempCache->pAddress + virtualRelative;
-		}
-	}
-
-	// New entry, translate and append 
-	UINT64 tempPhysical = VTOP(address, directoryBase, verbose);
-
-	if (tempPhysical != 0)
-	{
-		cachingSize = cachingSize + 1;
-		Cache *tempCache = (Cache*)(cachingPointer + (cachingSize * sizeof(Cache)));
-		tempCache->pAddress = tempPhysical & 0xfffffffffffff000;
-		tempCache->vAddress = virtualPageBase & 0xfffffffffffff000;
-
-		return tempPhysical;
-	}
-	else
-	{
-		return 0;
-	}
-}
-
-
-// just an wrapper for better namings ))))
-UINT64 translate(UINT64 address, UINT64 directoryBase, BOOLEAN verbose)
-{
-	return caching(address, directoryBase, verbose);
-}
-
-
 // Declaration for ASM func
 UINT64 GetCR3(VOID);
 
-BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 * pqwPDE, UINT64 * pqwPDPTE, UINT64 * pqwPML4E, BOOLEAN verbose)
+BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 *pqwPDE, UINT64 *pqwPDPTE, UINT64 *pqwPML4E, BOOLEAN verbose)
 {
 	BOOLEAN result, fFirstRun;
 	UINT64 PML4[512], PDPT[512], PD[512], PT[512];
@@ -242,7 +171,8 @@ BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 * pq
 		{
 			PML4_idx = 0x1ff & (qwA >> 39);
 			qwPageTableData = PML4[PML4_idx];
-			if ((qwPageTableData & 0x81) != 0x01) {
+			if ((qwPageTableData & 0x81) != 0x01)
+			{
 				qwA = (qwA + 0x0000008000000000) & 0xffffff8000000000;
 				continue;
 			}
@@ -253,17 +183,19 @@ BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 * pq
 			PT_idx = 0xfff;
 		}
 
-		if (PDPT_idx != (0x1ff & (qwA >> 30)))  // PDPT(Page-Directory Pointer Table)
+		if (PDPT_idx != (0x1ff & (qwA >> 30))) // PDPT(Page-Directory Pointer Table)
 		{
 			PDPT_idx = 0x1ff & (qwA >> 30);
 			qwPageTableData = PDPT[PDPT_idx];
-			if ((qwPageTableData & 0x81) != 0x01) {
+			if ((qwPageTableData & 0x81) != 0x01)
+			{
 				qwA = (qwA + 0x0000000040000000) & 0xffffffffC0000000;
 				continue;
 			}
 			p_memCpy((UINT64)PD, qwPageTableData & 0x0000fffffffff000, 0x1000, verbose);
 
-			if (!result) {
+			if (!result)
+			{
 				qwA = (qwA + 0x0000000040000000) & 0xffffffffC0000000;
 				continue;
 			}
@@ -271,39 +203,69 @@ BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 * pq
 			PT_idx = 0xfff;
 		}
 
-		if (PD_idx != (0x1ff & (qwA >> 21))) { // PD (Page Directory)
+		if (PD_idx != (0x1ff & (qwA >> 21)))
+		{ // PD (Page Directory)
 			PD_idx = 0x1ff & (qwA >> 21);
 			qwPageTableData = PD[PD_idx];
-			if (((qwPageTableData & 0x81) == 0x81) && ((qwPageTableData & 0x0000ffffffe00000) == (qwAddrPhys & 0x0000ffffffe00000))) { // map 2MB page
+			if (((qwPageTableData & 0x81) == 0x81) && ((qwPageTableData & 0x0000ffffffe00000) == (qwAddrPhys & 0x0000ffffffe00000)))
+			{ // map 2MB page
 				*pqwAddrVirt = qwA + (qwAddrPhys & 0x1fffff);
-				if (pqwPTE) { *pqwPTE = PD[PD_idx]; }
-				if (pqwPDE) { *pqwPDE = PD[PD_idx]; }
-				if (pqwPDPTE) { *pqwPDPTE = PDPT[PDPT_idx]; }
-				if (pqwPML4E) { *pqwPML4E = PML4[PML4_idx]; }
+				if (pqwPTE)
+				{
+					*pqwPTE = PD[PD_idx];
+				}
+				if (pqwPDE)
+				{
+					*pqwPDE = PD[PD_idx];
+				}
+				if (pqwPDPTE)
+				{
+					*pqwPDPTE = PDPT[PDPT_idx];
+				}
+				if (pqwPML4E)
+				{
+					*pqwPML4E = PML4[PML4_idx];
+				}
 				return TRUE;
 			}
-			if ((qwPageTableData & 0x81) != 0x01) {
+			if ((qwPageTableData & 0x81) != 0x01)
+			{
 				qwA = (qwA + 0x0000000000200000) & 0xffffffffffE00000;
 				continue;
 			}
 			p_memCpy((UINT64)PT, qwPageTableData & 0x0000fffffffff000, 0x1000, verbose);
 
-			if (!result) {
+			if (!result)
+			{
 				qwA = (qwA + 0x0000000000200000) & 0xffffffffffE00000;
 				continue;
 			}
 			PT_idx = 0xfff;
 		}
 
-		if (PT_idx != (0x1ff & (qwA >> 12))) { // PT (Page Table)
+		if (PT_idx != (0x1ff & (qwA >> 12)))
+		{ // PT (Page Table)
 			PT_idx = 0x1ff & (qwA >> 12);
 			qwPageTableData = PT[PT_idx];
-			if (((qwPageTableData & 0x01) == 0x01) && ((qwPageTableData & 0x0000fffffffff000) == (qwAddrPhys & 0x0000fffffffff000))) {
+			if (((qwPageTableData & 0x01) == 0x01) && ((qwPageTableData & 0x0000fffffffff000) == (qwAddrPhys & 0x0000fffffffff000)))
+			{
 				*pqwAddrVirt = qwA + (qwAddrPhys & 0xfff);
-				if (pqwPTE) { *pqwPTE = PT[PT_idx]; }
-				if (pqwPDE) { *pqwPDE = PD[PD_idx]; }
-				if (pqwPDPTE) { *pqwPDPTE = PDPT[PDPT_idx]; }
-				if (pqwPML4E) { *pqwPML4E = PML4[PML4_idx]; }
+				if (pqwPTE)
+				{
+					*pqwPTE = PT[PT_idx];
+				}
+				if (pqwPDE)
+				{
+					*pqwPDE = PD[PD_idx];
+				}
+				if (pqwPDPTE)
+				{
+					*pqwPDPTE = PDPT[PDPT_idx];
+				}
+				if (pqwPML4E)
+				{
+					*pqwPML4E = PML4[PML4_idx];
+				}
 				return TRUE;
 			}
 			qwA = (qwA + 0x0000000000001000) & 0xfffffffffffff000;
@@ -312,7 +274,6 @@ BOOLEAN PTOV(UINT64 qwAddrPhys, UINT64 *pqwAddrVirt, UINT64 *pqwPTE, UINT64 * pq
 	}
 	return FALSE;
 }
-
 
 BOOLEAN v_memWrite(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOLEAN verbose)
 {
@@ -328,19 +289,18 @@ BOOLEAN v_memWrite(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOL
 	return p_memCpy(pDest, src, n, verbose);
 }
 
-
 BOOLEAN v_memReadMultiPage(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOLEAN verbose)
 {
 	UINT64 curr_vAddr = src;
 	UINT64 read = 0;
 
-	while(n > 0)
+	while (n > 0)
 	{
 		UINT64 nextPage = (curr_vAddr + 0x1000) & ~0xfff;
 		UINT64 to_read = nextPage - curr_vAddr;
 
 		// if it's the "last" read
-		if(n < to_read)
+		if (n < to_read)
 			to_read = n;
 
 		// Translate to physical
@@ -358,8 +318,7 @@ BOOLEAN v_memReadMultiPage(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBa
 	return TRUE;
 }
 
-
-BOOLEAN v_memCpy(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOLEAN verbose)
+BOOLEAN v_memRead(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOLEAN verbose)
 {
 	// Translate to physical
 	UINT64 pSrc = VTOP(src, directoryBase, FALSE);
@@ -371,19 +330,4 @@ BOOLEAN v_memCpy(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase, BOOLEA
 
 	// Read physical
 	return p_memCpy(dest, pSrc, n, verbose);
-}
-
-
-BOOLEAN vRead(UINT64 dest, UINT64 src, size_t n, UINT64 directoryBase)
-{
-	// Translate to physical
-	UINT64 pSrc = translate(src, directoryBase, FALSE);
-
-	if (pSrc == 0)
-	{
-		return FALSE;
-	}
-
-	// Read physical
-	return p_memCpy(dest, pSrc, n, FALSE);
 }

@@ -1,5 +1,4 @@
 #include "serial.h"
-#include "config.h"
 
 /*
  * UART Register Offsets
@@ -25,11 +24,6 @@
 #define LSR_RXDA                0x01
 #define DLAB                    0x01
 
-/*
- * Settings for the serial
- */
-#define BAUDRATE_MAX 115200
-
 
 /*
  * UART Settings
@@ -47,7 +41,7 @@ VOID SerialPortInitialize(UINT16 Port, UINTN Baudrate)
 	UINT8 Data = (UINT8)(m_Data - (UINT8)5);
 
 	// Calculate divisor for baud generator
-	UINTN Divisor = BAUDRATE_MAX / Baudrate;
+	UINTN Divisor = SERIAL_BAUDRATE_MAX / Baudrate;
 
 	// Set communications format
 	UINT8 OutputData = (UINT8)((DLAB << 7) | (m_BreakSet << 6) | (m_Parity << 3) | (m_Stop << 2) | Data);

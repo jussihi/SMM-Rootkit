@@ -1,31 +1,27 @@
 #include "MemoryMapUEFI.h"
 
-
-
-EFI_EXIT_BOOT_SERVICES    gOrigExitBootServices;
-EFI_MEMORY_DESCRIPTOR     *mUefiMemoryMap;
-UINTN                     mUefiMemoryMapSize;
-UINTN                     mUefiDescriptorSize;
-extern EFI_BOOT_SERVICES  *gBS;
-
+EFI_EXIT_BOOT_SERVICES gOrigExitBootServices;
+EFI_MEMORY_DESCRIPTOR *mUefiMemoryMap;
+UINTN mUefiMemoryMapSize;
+UINTN mUefiDescriptorSize;
+extern EFI_BOOT_SERVICES *lBS; // From SMMRootkit.c
 
 #define NEXT_MEMORY_DESCRIPTOR(MemoryDescriptor, Size) \
-  ((EFI_MEMORY_DESCRIPTOR *)((UINT8 *)(MemoryDescriptor) + (Size)))
+	((EFI_MEMORY_DESCRIPTOR *)((UINT8 *)(MemoryDescriptor) + (Size)))
 
 #define PREVIOUS_MEMORY_DESCRIPTOR(MemoryDescriptor, Size) \
-  ((EFI_MEMORY_DESCRIPTOR *)((UINT8 *)(MemoryDescriptor) - (Size)))
+	((EFI_MEMORY_DESCRIPTOR *)((UINT8 *)(MemoryDescriptor) - (Size)))
 
-
-BOOLEAN IsUefiPageNotPresent(IN EFI_MEMORY_DESCRIPTOR  *MemoryMap)
+BOOLEAN IsUefiPageNotPresent(IN EFI_MEMORY_DESCRIPTOR *MemoryMap)
 {
 	switch (MemoryMap->Type)
 	{
 		//case EfiLoaderCode:
 		//case EfiLoaderData:
-	//case EfiBootServicesCode:
-	//case EfiBootServicesData:
+		//case EfiBootServicesCode:
+		//case EfiBootServicesData:
 		//case EfiUnusableMemory:
-	//case EfiACPIReclaimMemory:
+		//case EfiACPIReclaimMemory:
 		return TRUE;
 	default:
 		return FALSE;
@@ -34,11 +30,11 @@ BOOLEAN IsUefiPageNotPresent(IN EFI_MEMORY_DESCRIPTOR  *MemoryMap)
 
 STATIC BOOLEAN CopyMemUnsafe(UINT64 dest, UINT64 src, UINT32 n, BOOLEAN verbose)
 {
-	// Typecast src and dest addresses to (char *) 
-	CHAR8* csrc = (CHAR8*)src;
-	CHAR8* cdest = (CHAR8*)dest;
+	// Typecast src and dest addresses to (char *)
+	CHAR8 *csrc = (CHAR8 *)src;
+	CHAR8 *cdest = (CHAR8 *)dest;
 
-	// Copy contents of src[] to dest[] 
+	// Copy contents of src[] to dest[]
 	for (UINT32 i = 0; i < n; i++)
 		cdest[i] = csrc[i];
 
@@ -46,22 +42,24 @@ STATIC BOOLEAN CopyMemUnsafe(UINT64 dest, UINT64 src, UINT32 n, BOOLEAN verbose)
 }
 
 STATIC VOID SortMemoryMap(
-	IN OUT EFI_MEMORY_DESCRIPTOR  *MemoryMap,
-	IN UINTN                      MemoryMapSize,
-	IN UINTN                      DescriptorSize
-)
+		IN OUT EFI_MEMORY_DESCRIPTOR *MemoryMap,
+		IN UINTN MemoryMapSize,
+		IN UINTN DescriptorSize)
 {
-	EFI_MEMORY_DESCRIPTOR       *MemoryMapEntry;
-	EFI_MEMORY_DESCRIPTOR       *NextMemoryMapEntry;
-	EFI_MEMORY_DESCRIPTOR       *MemoryMapEnd;
-	EFI_MEMORY_DESCRIPTOR       TempMemoryMap;
+	EFI_MEMORY_DESCRIPTOR *MemoryMapEntry;
+	EFI_MEMORY_DESCRIPTOR *NextMemoryMapEntry;
+	EFI_MEMORY_DESCRIPTOR *MemoryMapEnd;
+	EFI_MEMORY_DESCRIPTOR TempMemoryMap;
 
 	MemoryMapEntry = MemoryMap;
 	NextMemoryMapEntry = NEXT_MEMORY_DESCRIPTOR(MemoryMapEntry, DescriptorSize);
 	MemoryMapEnd = (EFI_MEMORY_DESCRIPTOR *)((UINT8 *)MemoryMap + MemoryMapSize);
-	while (MemoryMapEntry < MemoryMapEnd) {
-		while (NextMemoryMapEntry < MemoryMapEnd) {
-			if (MemoryMapEntry->PhysicalStart > NextMemoryMapEntry->PhysicalStart) {
+	while (MemoryMapEntry < MemoryMapEnd)
+	{
+		while (NextMemoryMapEntry < MemoryMapEnd)
+		{
+			if (MemoryMapEntry->PhysicalStart > NextMemoryMapEntry->PhysicalStart)
+			{
 				CopyMem(&TempMemoryMap, MemoryMapEntry, sizeof(EFI_MEMORY_DESCRIPTOR));
 				CopyMem(MemoryMapEntry, NextMemoryMapEntry, sizeof(EFI_MEMORY_DESCRIPTOR));
 				CopyMem(NextMemoryMapEntry, &TempMemoryMap, sizeof(EFI_MEMORY_DESCRIPTOR));
@@ -76,16 +74,15 @@ STATIC VOID SortMemoryMap(
 }
 
 STATIC VOID MergeMemoryMapForNotPresentEntry(
-	IN OUT EFI_MEMORY_DESCRIPTOR  *MemoryMap,
-	IN OUT UINTN                  *MemoryMapSize,
-	IN UINTN                      DescriptorSize
-)
+		IN OUT EFI_MEMORY_DESCRIPTOR *MemoryMap,
+		IN OUT UINTN *MemoryMapSize,
+		IN UINTN DescriptorSize)
 {
-	EFI_MEMORY_DESCRIPTOR       *MemoryMapEntry;
-	EFI_MEMORY_DESCRIPTOR       *MemoryMapEnd;
-	UINT64                      MemoryBlockLength;
-	EFI_MEMORY_DESCRIPTOR       *NewMemoryMapEntry;
-	EFI_MEMORY_DESCRIPTOR       *NextMemoryMapEntry;
+	EFI_MEMORY_DESCRIPTOR *MemoryMapEntry;
+	EFI_MEMORY_DESCRIPTOR *MemoryMapEnd;
+	UINT64 MemoryBlockLength;
+	EFI_MEMORY_DESCRIPTOR *NewMemoryMapEntry;
+	EFI_MEMORY_DESCRIPTOR *NextMemoryMapEntry;
 
 	MemoryMapEntry = MemoryMap;
 	NewMemoryMapEntry = MemoryMap;
@@ -136,32 +133,31 @@ BOOLEAN InitUefiMemoryMap()
 
 	EFI_STATUS Status;
 
-	Status = gBS->GetMemoryMap(
-		&MemoryMapSize,
-		MemoryMap,
-		&LocalMapKey,
-		&mUefiDescriptorSize,
-		&DescriptorVersion
-	);
+	Status = lBS->GetMemoryMap(
+			&MemoryMapSize,
+			MemoryMap,
+			&LocalMapKey,
+			&mUefiDescriptorSize,
+			&DescriptorVersion);
 
-	do {
-		Status = gBS->AllocatePool(EfiBootServicesData, MemoryMapSize, (VOID **)&MemoryMap);
+	do
+	{
+		Status = lBS->AllocatePool(EfiBootServicesData, MemoryMapSize, (VOID **)&MemoryMap);
 
 		if (MemoryMap == NULL)
 		{
 			return FALSE;
 		}
 
-		Status = gBS->GetMemoryMap(
-			&MemoryMapSize,
-			MemoryMap,
-			&LocalMapKey,
-			&mUefiDescriptorSize,
-			&DescriptorVersion
-		);
-		if (EFI_ERROR(Status)) 
+		Status = lBS->GetMemoryMap(
+				&MemoryMapSize,
+				MemoryMap,
+				&LocalMapKey,
+				&mUefiDescriptorSize,
+				&DescriptorVersion);
+		if (EFI_ERROR(Status))
 		{
-			gBS->FreePool(MemoryMap);
+			lBS->FreePool(MemoryMap);
 			MemoryMap = NULL;
 		}
 	} while (Status == EFI_BUFFER_TOO_SMALL);
@@ -174,10 +170,10 @@ BOOLEAN InitUefiMemoryMap()
 
 	mUefiMemoryMapSize = MemoryMapSize;
 	EFI_PHYSICAL_ADDRESS NewMemoryMap;
-	Status = gBS->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &NewMemoryMap);
+	Status = lBS->AllocatePages(AllocateAnyPages, EfiRuntimeServicesData, 1, &NewMemoryMap);
 	CopyMemUnsafe(NewMemoryMap, (UINT64)MemoryMap, MemoryMapSize, FALSE);
-	mUefiMemoryMap = (EFI_MEMORY_DESCRIPTOR*)NewMemoryMap;
-	gBS->FreePool(MemoryMap);
+	mUefiMemoryMap = (EFI_MEMORY_DESCRIPTOR *)NewMemoryMap;
+	lBS->FreePool(MemoryMap);
 
 	return TRUE;
 }
@@ -185,8 +181,8 @@ BOOLEAN InitUefiMemoryMap()
 BOOLEAN IsAddressValid(UINT64 address)
 {
 	EFI_MEMORY_DESCRIPTOR *MemoryMap;
-	UINTN                 MemoryMapEntryCount;
-	UINTN                 Index;
+	UINTN MemoryMapEntryCount;
+	UINTN Index;
 
 	if (mUefiMemoryMap != NULL)
 	{
@@ -205,19 +201,17 @@ BOOLEAN IsAddressValid(UINT64 address)
 	return FALSE;
 }
 
-
-EFI_MEMORY_DESCRIPTOR* GetUefiMemoryMap()
+EFI_MEMORY_DESCRIPTOR *GetUefiMemoryMap()
 {
-  return mUefiMemoryMap;
+	return mUefiMemoryMap;
 }
-
 
 VOID ShowMemoryMap()
 {
 	EFI_MEMORY_DESCRIPTOR *MemoryMap;
-	UINTN                 MemoryMapEntryCount;
-	UINTN                 Index;
-  
+	UINTN MemoryMapEntryCount;
+	UINTN Index;
+
 	if (mUefiMemoryMap != NULL)
 	{
 		MemoryMap = mUefiMemoryMap;

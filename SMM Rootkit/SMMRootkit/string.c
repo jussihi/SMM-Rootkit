@@ -42,17 +42,17 @@ INT32 memcmp(const VOID* str1, const VOID* str2, size_t count)
 	return 0;
 }
 
-CHAR8 tolower(unsigned char ch)
+CHAR8 tolower(UINT8 ch)
 {
     if (ch >= 'A' && ch <= 'Z')
         ch = 'a' + (ch - 'A');
     return ch;
  }
 
-INT32 stricmp(const char *s1, const char *s2)
+INT32 stricmp(const CHAR8 *s1, const CHAR8 *s2)
 {
-    const unsigned char *us1 = (const unsigned char *)s1,
-                        *us2 = (const unsigned char *)s2;
+    const UINT8 *us1 = (const UINT8*)s1,
+                        *us2 = (const UINT8*)s2;
 
     while (tolower(*us1) == tolower(*us2++))
         if (*us1++ == '\0')
@@ -84,7 +84,7 @@ INT32 strncmp(const CHAR8* s1, const CHAR8* s2, size_t n)
 	}
 	else
 	{
-		return(*(unsigned char *)s1 - *(unsigned char *)s2);
+		return(*(UINT8*)s1 - *(UINT8*)s2);
 	}
 }
 
@@ -106,9 +106,9 @@ const CHAR8* strstr(const CHAR8* X, const CHAR8* Y)
 
 CHAR8* strdup(CHAR8* src)
 {
-    char *str;
-    char *p;
-    int len = 0;
+    CHAR8 *str;
+    CHAR8 *p;
+    INT32 len = 0;
 
     while (src[len])
         len++;

@@ -15,8 +15,8 @@
 
 typedef struct _Cache
 {
-	UINT64 vAddress;
-	UINT64 pAddress;
+  UINT64 vAddress;
+  UINT64 pAddress;
 } Cache, PCache;
 
 #ifdef __GNUC__

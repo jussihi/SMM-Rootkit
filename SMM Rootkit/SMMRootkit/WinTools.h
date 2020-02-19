@@ -31,75 +31,75 @@
 
 typedef struct ProcessData
 {
-	UINT64 mapsStart;
-	UINT64 mapsSize;
-	INT32 pid;
+  UINT64 mapsStart;
+  UINT64 mapsSize;
+  INT32 pid;
 } ProcessData;
 
 typedef struct WinOffsets
 {
-	INT64 apl;
-	INT64 session;
-	INT64 imageFileName;
-	INT64 dirBase;
-	INT64 peb;
-	INT64 peb32;
-	INT64 threadListHead;
-	INT64 threadListEntry;
-	INT64 teb;
+  INT64 apl;
+  INT64 session;
+  INT64 imageFileName;
+  INT64 dirBase;
+  INT64 peb;
+  INT64 peb32;
+  INT64 threadListHead;
+  INT64 threadListEntry;
+  INT64 teb;
 } WinOffsets;
 
 typedef struct WinProc
 {
-	UINT64 process;
-	UINT64 physProcess;
-	UINT64 dirBase;
-	UINT64 pid;
-	char name[16];
+  UINT64 process;
+  UINT64 physProcess;
+  UINT64 dirBase;
+  UINT64 pid;
+  char name[16];
 } WinProc;
 
 typedef struct WinProcList
 {
-	WinProc *list;
-	size_t size;
+  WinProc *list;
+  size_t size;
 } WinProcList;
 
 typedef struct WinExport
 {
-	char *name;
-	UINT64 address;
+  char *name;
+  UINT64 address;
 } WinExport;
 
 typedef struct WinExportList
 {
-	WinExport *list;
-	size_t size;
+  WinExport *list;
+  size_t size;
 } WinExportList;
 
 typedef struct WinModule
 {
-	UINT64 baseAddress;
-	UINT64 entryPoint;
-	UINT64 sizeOfModule;
-	char *name;
-	short loadCount;
+  UINT64 baseAddress;
+  UINT64 entryPoint;
+  UINT64 sizeOfModule;
+  char *name;
+  short loadCount;
 } WinModule;
 
 typedef struct WinModuleList
 {
-	WinModule *list;
-	size_t size;
+  WinModule *list;
+  size_t size;
 } WinModuleList;
 
 typedef struct WinCtx
 {
-	ProcessData process;
-	WinOffsets offsets;
-	UINT64 ntKernel;
-	UINT16 ntVersion;
-	UINT32 ntBuild;
-	WinExportList ntExports;
-	WinProc initialProcess;
+  ProcessData process;
+  WinOffsets offsets;
+  UINT64 ntKernel;
+  UINT16 ntVersion;
+  UINT32 ntBuild;
+  WinExportList ntExports;
+  WinProc initialProcess;
 } WinCtx;
 
 typedef struct tdPE_THUNKINFO_IAT

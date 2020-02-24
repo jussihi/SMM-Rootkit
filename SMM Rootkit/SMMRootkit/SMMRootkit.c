@@ -2,18 +2,7 @@
 #include <Uefi.h>
 
 // Protocols
-#include <Protocol/SmmCpu.h>
 #include <Protocol/SmmBase2.h>
-#include <Protocol/SmmSwDispatch2.h>
-#include <Protocol/Cpu.h>
-#include <Protocol/SerialIo.h>
-#include <Library/PcdLib.h>
-#include <Library/BaseLib.h>
-#include <Library/BaseMemoryLib.h>
-#include <Library/IoLib.h>
-#include <Library/MemoryAllocationLib.h>
-#include <Protocol/PciIo.h>
-#include <Library/PciLib.h>
 
 // Our includes
 #include "MemoryMapUEFI.h"
@@ -23,7 +12,6 @@
 #include "Memory.h"
 #include "WinTools.h"
 
-EFI_CPU_ARCH_PROTOCOL *mCpu = NULL;
 EFI_SMM_SYSTEM_TABLE2 *gSmst2 = NULL;
 
 // UEFI Tables (will be gone after exiting DXE stage)
@@ -100,7 +88,7 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *Syste
   SerialPrintString("--------------------------------------------\r\n");
   SerialPrintString("\r\n");
 
-  // Save the system tables etc. in global variable for further usage (currently not used)
+  // Save the system tables etc. in global variable for further usage (currently only lBS used)
   lST = SystemTable;
   lBS = SystemTable->BootServices;
   lRT = SystemTable->RuntimeServices;
@@ -108,9 +96,8 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *Syste
   EFI_STATUS res;
   EFI_SMM_BASE2_PROTOCOL *SmmBase2;
 
+  // lookup the SmmBase2 protocol by its GUID
   EFI_GUID SmmBase2Guid = EFI_SMM_BASE2_PROTOCOL_GUID;
-
-  // need EFI_SMM_BASE2_PROTOCOL
   if ((res = SystemTable->BootServices->LocateProtocol(&SmmBase2Guid, NULL, (void **)&SmmBase2)) != EFI_SUCCESS)
   {
     SerialPrintString("Could not locate SmmBase2 protocol!\r\n");
@@ -124,13 +111,7 @@ EFI_STATUS EFIAPI UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *Syste
     return res;
   }
 
-  if ((res = SystemTable->BootServices->LocateProtocol(&gEfiCpuArchProtocolGuid, NULL, (void **)&mCpu)) != EFI_SUCCESS)
-  {
-    SerialPrintString("Could not locate EfiCpuArch protocol!\r\n");
-    return res;
-  }
-
-  // Register SMM Root Handler, discard the returning handle (we never unload the handler)
+  // Register SMI Root Handler, discard the returning handle (we never unload the handler)
   EFI_HANDLE hSmmHandler;
   if ((res = gSmst2->SmiHandlerRegister(&SmmHandler, NULL, &hSmmHandler)) != EFI_SUCCESS)
   {

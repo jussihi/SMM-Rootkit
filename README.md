@@ -16,6 +16,8 @@
 
 This System Management Mode (SMM) rootkit is a PoC to demonstrate how injecting shellcode to a ring0/ring3 context can be achieved from the SMM. 
 
+Created by Jussi Hietanen (Aalto University, Espoo FI) and Diego Caminada (HF-ICT, Muttenz CH).
+
 ## Repository Contents
 
 #### SMM Rootkit

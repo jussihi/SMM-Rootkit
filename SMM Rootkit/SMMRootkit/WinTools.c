@@ -212,15 +212,49 @@ STATIC UINT32 GetNTBuild(const WinCtx *ctx)
     return 0;
   }
 
-  CHAR8 buf[0x100];
+  UINT8 buf[0x100];
   v_memRead((UINT64)buf, getVersion, 0x100, ctx->initialProcess.dirBase, FALSE);
 
   /* Find writes to rcx +12 -- that's where the version number is stored. These instructions are not on XP, but that is simply irrelevant. */
-  for (CHAR8 *b = buf; b - buf < 0xf0; b++)
+  for (UINT8 *b = buf; b - buf < 0xf0; b++)
   {
     UINT32 val = *(UINT32 *)(VOID *)b & 0xffffff;
     if (val == 0x0c41c7 || val == 0x05c01b)
       return *(UINT32 *)(VOID *)(b + 3);
+  }
+
+  /* Build 19044 onwards:
+   *
+   * If we can't find the rcx + 12, find what was moved to EAX with offset of RIP,
+   * In bytecode this translates to 0f b7 05 ef be ad de 
+   *    (movzx  eax,WORD PTR [rip+offset] , offset deadbeef)
+   * 
+   * Later on in v_memRead a static offset of 7 is used because the movzx instruction 
+   * takes 7 bytes in total, and RIP is pointing to the *next* instruction.
+   */
+  for (UINT8 *b = buf; b - buf < 0xf0; b++)
+  {
+    UINT32 val = *(UINT32 *)(VOID *)b & 0xffffff;
+    /*
+     * From 19044 onwards there are many movzx  eax,WORD PTR
+     * instructions, for now the Build is the first being pushed
+     */
+    if (val == 0x05b70f)
+    {
+      UINT32 offset = *(UINT32 *)(VOID *)(b + 3);
+      UINT16 build = 0;
+      v_memRead((UINT64)&build, getVersion + (b - buf) + 7 + offset, sizeof(build), ctx->initialProcess.dirBase, FALSE);
+      
+      /*
+       * For some reason the kernel first tries to offer 19041 as the build number here, 
+       * but after a couple of retries the build number is magically patched to 
+       * 19044. Gotta love Microsoft :-)
+       */
+      if(build > 19041)
+        return (UINT32)build;
+
+      return 0;
+    }
   }
 
   return 0;
@@ -1337,7 +1371,7 @@ STATIC VOID PE_SECTION_DisplayBuffer(WinProc *process, WinModule *basemodule, UI
 
   if (ret != EFI_SUCCESS)
   {
-    SerialPrintStringDebug("ERROR: Failed allocating pages \r\n");
+    SerialPrintString("ERROR: Failed allocating pages \r\n");
     return;
   }
   UINT8 *pbModuleHeader = (UINT8 *)physAddr;

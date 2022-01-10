@@ -3,8 +3,9 @@
 ## Compile and use
 
 ```
-cl.exe /O1 /Os /Oy /FD /MT /GS- /J /GR- /FAcs /W4 /c /TC windows_x64_umd_iat.c
-ml64 windows_x64_umd_iat.asm /link /NODEFAULTLIB /RELEASE /MACHINE:X64 /entry:main "windows_x64_umd_iat.obj"
+cl.exe /O1 /Os /Oy /FD /MT /GS- /J /GR- /FAcs /W4 /c /TC
+windows_x64_umd_iat_hook.c
+ml64 windows_x64_umd_iat.asm /link /NODEFAULTLIB /RELEASE /MACHINE:X64 /entry:main "windows_x64_umd_iat_hook.obj"
 ```
 
 To generate the shellcode for the SMM Rootkit, use the *shellcode64_win.exe* tool from the parent directory

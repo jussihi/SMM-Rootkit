@@ -32,7 +32,7 @@ static BOOLEAN WindowsUmdIATHookStage1()
   //-----------------------------------------
   // 0: Find the process and its base module
   //-----------------------------------------
-  BOOLEAN verbose = TRUE;
+  BOOLEAN verbose = FALSE;
   WinProc process;
 
   if (!DumpSingleProcess(winGlobal, "smm_target.exe", &process, verbose))

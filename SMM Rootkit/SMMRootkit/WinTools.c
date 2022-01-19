@@ -839,6 +839,11 @@ BOOLEAN DumpSingleProcess(WinCtx *ctx, CHAR8 *processname, WinProc *process, BOO
       if (IsAddressValid(curProc + ctx->offsets.imageFileName) == TRUE)
       {
         name = (CHAR8 *)(curProc + ctx->offsets.imageFileName);
+	if (verbose) {
+		SerialPrintString("---- NAME: ");
+		SerialPrintString(name);
+		SerialPrintString(" ----\n\r");
+	}
 
         // Check if it's the process requested
         if (!strcmp(name, processname))
@@ -1226,9 +1231,10 @@ BOOLEAN ProcessGetThunkInfoIAT(WinProc *process, WinModule *basemodule, CHAR8 *s
   ret = gSmst2->SmmAllocatePages(AllocateAnyPages, EfiRuntimeServicesData, cbModule / 0x1000 + 1, &physAddrImage);
   if (ret != EFI_SUCCESS)
   {
-    SerialPrintStringDebug("ERROR: IAT: Failed allocating pages for the module image data \r\n");
+    SerialPrintString("ERROR: IAT: Failed allocating pages for the module image data \r\n");
     goto fail;
   }
+  SerialPrintString("Allocated pages\r\n");
   pbModule = (UINT8 *)physAddrImage;
   // nullify the allocated memory
   for (INT32 k = 0; k < cbModule; k++)
@@ -1244,6 +1250,12 @@ BOOLEAN ProcessGetThunkInfoIAT(WinProc *process, WinModule *basemodule, CHAR8 *s
   {
     if (pIID[i].Name > cbModule - 64)
     {
+      SerialPrintString("---- ");
+      SerialPrintNumber(pIID[i].Name, 16);
+      SerialPrintString(" ");
+      SerialPrintNumber(cbModule - 64, 16);
+      SerialPrintString("\r\n");
+
       i++;
       continue;
     }

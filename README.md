@@ -11,6 +11,9 @@
 - [Running the OVMF inside QEMU/KVM](#running-the-ovmf-inside-qemukvm)
   * [VM setup](#vm-setup)
   * [Running](#running)
+- [FAQ](#faq)
+  * [How to patch PiSmmCpuDxeSmm](#how-to-patch-pismmcpudxesmm)
+  * [No serial output after boot](#no-serial-output-after-boot)
 
 ## Intro
 
@@ -140,3 +143,35 @@ To check the serial output (the VM must be powered on)
 /* win10 is the name of the libvirt instance */
 # virsh console win10
 ```
+
+## FAQ
+
+### How to patch PiSmmCpuDxeSmm
+
+If you are trying to run this SMM rootkit on real hardware, you need to patch your motherboard's `PiSmmCpuDxeSmm` module from the UEFI firmware. You can mimick [our patch](https://github.com/jussihi/SMM-Rootkit/tree/master/SMM%20Rootkit/UefiCpuPkg) by 
+
+Patching this variable initialization out and hard code the variable itself to 0 with your favorite disassembler (IDA or similar):
+https://github.com/tianocore/edk2/blob/master/UefiCpuPkg/PiSmmCpuDxeSmm/X64/PageTbl.c#L352
+
+Easiest way to find that function (SmmInitPageTable) is to search for the strings of the error messages:
+https://github.com/tianocore/edk2/blob/master/UefiCpuPkg/Library/CpuExceptionHandlerLib/X64/ArchExceptionHandler.c#L265
+
+Which is referenced multiple times in the SMI Page fault handler:
+https://github.com/tianocore/edk2/blob/master/UefiCpuPkg/PiSmmCpuDxeSmm/X64/PageTbl.c#L1003
+
+And the page fault handler is initialized in the same function as the variable initialization (SmmInitPageTable):
+https://github.com/tianocore/edk2/blob/master/UefiCpuPkg/PiSmmCpuDxeSmm/X64/PageTbl.c#L442
+
+### No serial output after boot
+
+Sometimes the serial traffic is blocked as the operating system's own serial driver. This is at least the case in Windows systems when not booting inside a (QEMU/KVM) virtual machine.
+
+#### There are two ways to get serial working on this sort of situation:
+
+- Block the Operating System from loading the driver.
+
+On GNU+Linux, you can disable the driver completely if one is loaded. On Windows systems, you might need to rename/delete the system's serial driver. The default path to the driver executable is  `C:\Windows\System32\drivers\serial.sys`
+
+- Open an SSH client locally
+
+You can also open the connection to the local serial port using your favorite serial client. At least on Windows this will prevent Windows' own driver from suppressing the serial output.
